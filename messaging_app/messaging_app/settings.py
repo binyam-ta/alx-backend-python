@@ -106,6 +106,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",         # most secure
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",   # fallback
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",         # default fallback
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",     # fallback
+]
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
          'rest_framework.authentication.SessionAuthentication',  
