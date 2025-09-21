@@ -55,14 +55,12 @@ class UserSerializer(serializers.ModelSerializer):
 # ---------------------------
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)  # nested user info
+    message_body = serializers.CharField(max_length=1000)  # explicitly using CharField
 
     class Meta:
         model = Message
         fields = ['message_id', 'sender', 'conversation', 'message_body', 'sent_at']
 
-    # ---------------------------
-    # Validate that sender is in the conversation
-    # ---------------------------
     def validate(self, data):
         sender = self.context['request'].user
         conversation = data.get('conversation')
@@ -77,22 +75,16 @@ class MessageSerializer(serializers.ModelSerializer):
 # ---------------------------
 class ConversationSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
-    messages = serializers.SerializerMethodField()  # custom field to include messages
+    messages = serializers.SerializerMethodField()  # include nested messages
 
     class Meta:
         model = Conversation
         fields = ['conversation_id', 'participants', 'created_at', 'messages']
 
-    # ---------------------------
-    # Method to get messages
-    # ---------------------------
     def get_messages(self, obj):
         messages = obj.message_set.all().order_by('sent_at')
         return MessageSerializer(messages, many=True).data
 
-    # ---------------------------
-    # Example validation
-    # ---------------------------
     def validate(self, data):
         if not data.get('participants'):
             raise serializers.ValidationError("A conversation must have at least one participant.")
