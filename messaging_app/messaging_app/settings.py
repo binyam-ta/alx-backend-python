@@ -108,7 +108,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',   # if you plan to use token auth
+         'rest_framework.authentication.SessionAuthentication',  
+        'rest_framework.authentication.BasicAuthentication',   # if you plan to use token auth
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',  # require login by default
