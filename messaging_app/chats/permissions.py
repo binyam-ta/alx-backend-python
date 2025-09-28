@@ -1,23 +1,24 @@
 from rest_framework import permissions
-from .models import Conversation
+from .models import Conversation, Message
+from rest_framework.status import HTTP_403_FORBIDDEN
 
 class IsParticipantOfConversation(permissions.BasePermission):
     """
-    Custom permission:
-    - Allow only authenticated users
-    - Allow only conversation participants to access messages
+    Allow only participants of a conversation to access messages/conversations.
+    Supports all HTTP methods: GET, POST, PUT, PATCH, DELETE.
     """
+
     def has_object_permission(self, request, view, obj):
-        # Ensure the user is authenticated
-        if not request.user or not request.user.is_authenticated:
+        user = request.user
+        if not user or not user.is_authenticated:
             return False
 
-        # If object is a Conversation, check participants
+        # If object is a Conversation
         if isinstance(obj, Conversation):
-            return request.user in obj.participants.all()
+            return user in obj.participants.all()
 
         # If object is a Message, check the conversation’s participants
-        if hasattr(obj, "conversation"):
-            return request.user in obj.conversation.participants.all()
+        if isinstance(obj, Message):
+            return user in obj.conversation.participants.all()
 
         return False

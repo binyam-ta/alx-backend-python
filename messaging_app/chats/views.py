@@ -35,27 +35,16 @@
 #         serializer.save(sender=self.request.user)
 
 
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
-from .models import Message, Conversation
-from .serializers import MessageSerializer, ConversationSerializer
+from .models import Conversation, Message
+from .serializers import ConversationSerializer, MessageSerializer
 from .permissions import IsParticipantOfConversation
 from .pagination import MessagePagination
 from .filters import MessageFilter
-
-class MessageViewSet(viewsets.ModelViewSet):
-    serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
-    pagination_class = MessagePagination
-    filter_backends = [DjangoFilterBackend, OrderingFilter]  # add OrderingFilter
-    filterset_class = MessageFilter
-    ordering_fields = ['timestamp']  # allow ordering by timestamp
-    ordering = ['-timestamp']        # default ordering (newest first)
-
-    def get_queryset(self):
-        return Message.objects.filter(conversation__participants=self.request.user)
 
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
@@ -63,3 +52,36 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Conversation.objects.filter(participants=self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        conversation = self.get_object()
+        if request.user not in conversation.participants.all():
+            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
+
+class MessageViewSet(viewsets.ModelViewSet):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
+    pagination_class = MessagePagination
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = MessageFilter
+    ordering_fields = ['timestamp']
+    ordering = ['-timestamp']
+
+    def get_queryset(self):
+        return Message.objects.filter(conversation__participants=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        message = self.get_object()
+        if request.user not in message.conversation.participants.all():
+            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        message = self.get_object()
+        if request.user not in message.conversation.participants.all():
+            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
