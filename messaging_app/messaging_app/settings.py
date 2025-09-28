@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     # Third-party apps
     
     'rest_framework',
-
+    'rest_framework_simplejwt',
     # Your apps
     'chats',
 ]
@@ -115,13 +115,18 @@ PASSWORD_HASHERS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
          'rest_framework.authentication.SessionAuthentication',  
         'rest_framework.authentication.BasicAuthentication',   # if you plan to use token auth
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',  # require login by default
     ],
-    
+    "DEFAULT_PAGINATION_CLASS": "chats.pagination.MessagePagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ],
 
 }
 
