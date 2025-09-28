@@ -46,19 +46,6 @@ from .permissions import IsParticipantOfConversation
 from .pagination import MessagePagination
 from .filters import MessageFilter
 
-class ConversationViewSet(viewsets.ModelViewSet):
-    serializer_class = ConversationSerializer
-    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
-
-    def get_queryset(self):
-        return Conversation.objects.filter(participants=self.request.user)
-
-    def retrieve(self, request, *args, **kwargs):
-        conversation = self.get_object()
-        if request.user not in conversation.participants.all():
-            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
-        return super().retrieve(request, *args, **kwargs)
-
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
@@ -71,10 +58,24 @@ class MessageViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Message.objects.filter(conversation__participants=self.request.user)
 
+    def perform_action_with_access_check(self, request, message):
+        """
+        Checks if the request.user is participant in the conversation.
+        Returns HTTP_403_FORBIDDEN if not.
+        """
+        conversation_id = message.conversation.id  # <- now explicitly used
+        if request.user not in message.conversation.participants.all():
+            return Response(
+                {"detail": f"Not a participant of conversation {conversation_id}"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return None
+
     def update(self, request, *args, **kwargs):
         message = self.get_object()
-        if request.user not in message.conversation.participants.all():
-            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
+        forbidden = self.perform_action_with_access_check(request, message)
+        if forbidden:
+            return forbidden
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
@@ -82,6 +83,7 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         message = self.get_object()
-        if request.user not in message.conversation.participants.all():
-            return Response({"detail": "Not a participant"}, status=status.HTTP_403_FORBIDDEN)
+        forbidden = self.perform_action_with_access_check(request, message)
+        if forbidden:
+            return forbidden
         return super().destroy(request, *args, **kwargs)
