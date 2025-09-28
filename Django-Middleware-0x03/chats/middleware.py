@@ -95,7 +95,7 @@ class OffensiveLanguageMiddleware:
         return ip
 
 
-class RolePermissionMiddleware:
+class RolepermissionMiddleware:
     """
     Middleware to enforce role-based permissions for chat endpoints.
     Only users with role 'admin' or 'moderator' can access protected actions.
@@ -105,7 +105,6 @@ class RolePermissionMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Only restrict certain paths (adjust as needed)
         protected_paths = [
             "/api/messages/delete/",
             "/api/messages/update/",
@@ -117,8 +116,7 @@ class RolePermissionMiddleware:
             if not user or not user.is_authenticated:
                 return JsonResponse({"detail": "Authentication required."}, status=401)
 
-            # Check user role
-            user_role = getattr(user, "role", None)  # assumes 'role' field exists on User
+            user_role = getattr(user, "role", None)  # assumes 'role' field exists
             if user_role not in ["admin", "moderator"]:
                 return JsonResponse({"detail": "You do not have permission to perform this action."}, status=403)
 
