@@ -1,55 +1,69 @@
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_page
-from .models import Message, MessageHistory
+from django.utils.decorators import method_decorator
+from django.http import JsonResponse
+from django.views import View
+from .models import Message
+from .managers import UnreadMessagesManager
 
-# Inbox showing only unread messages, optimized
-@login_required
-@cache_page(60)  # Cache results for 60 seconds
-def inbox(request):
-    unread_messages = Message.unread.unread_for_user(request.user)\
-        .select_related('sender')\
-        .only('id', 'sender__username', 'content', 'timestamp')
-    
-    data = [
-        {
-            "id": msg.id,
-            "sender": msg.sender.username,
-            "content": msg.content,
-            "timestamp": msg.timestamp
-        } 
-        for msg in unread_messages
-    ]
-    return JsonResponse(data, safe=False)
 
-# Threaded messages view with prefetch and select
-@login_required
-@cache_page(60)  # Cache threaded conversation for 60 seconds
-def get_threaded_messages(request, conversation_id):
-    messages = Message.objects.filter(receiver=request.user, parent_message__isnull=True)\
-        .select_related('sender')\
-        .prefetch_related('replies')\
-        .only('id', 'sender__username', 'content', 'timestamp', 'edited')
-    
-    def build_thread(message):
-        return {
-            "id": message.id,
-            "sender": message.sender.username,
-            "content": message.content,
-            "timestamp": message.timestamp,
-            "edited": message.edited,
-            "replies": [build_thread(reply) for reply in message.replies.all().select_related('sender').only('id', 'sender__username', 'content', 'timestamp', 'edited')]
-        }
+# Custom function to recursively build message threads
+def build_thread(message):
+    return {
+        "id": message.id,
+        "sender": message.sender.username,
+        "receiver": message.receiver.username,
+        "content": message.content,
+        "timestamp": message.timestamp,
+        "edited": message.edited,
+        "edited_by": getattr(message, "edited_by", None),
+        "replies": [
+            build_thread(reply) for reply in message.replies.all()
+            .select_related('sender')
+            .only('id', 'sender__username', 'content', 'timestamp', 'edited', 'edited_by')
+        ]
+    }
 
-    data = [build_thread(msg) for msg in messages]
-    return JsonResponse(data, safe=False)
 
-# Message edit history
-@login_required
-@cache_page(60)
-def message_history(request, message_id):
-    message = get_object_or_404(Message, id=message_id, receiver=request.user)
-    history = message.history.all().only('old_content', 'edited_at')
-    data = [{"old_content": h.old_content, "edited_at": h.edited_at} for h in history]
-    return JsonResponse(data, safe=False)
+@method_decorator([login_required, cache_page(60)], name='dispatch')
+class SentMessagesView(View):
+    """
+    Returns all messages sent by the logged-in user in threaded format
+    """
+    def get(self, request):
+        # Filter messages sent by the user
+        messages = Message.objects.filter(sender=request.user, parent_message__isnull=True) \
+            .select_related('sender', 'receiver') \
+            .prefetch_related('replies') \
+            .only('id', 'sender__username', 'receiver__username', 'content', 'timestamp', 'edited', 'edited_by')
+
+        # Build threaded messages recursively
+        data = [build_thread(msg) for msg in messages]
+        return JsonResponse({"sent_messages": data}, safe=False)
+
+
+@method_decorator([login_required, cache_page(60)], name='dispatch')
+class UnreadMessagesView(View):
+    """
+    Returns all unread messages for the logged-in user
+    """
+    def get(self, request):
+        # Use the custom manager to get unread messages
+        unread_messages = Message.unread.unread_for_user(request.user) \
+            .select_related('sender', 'receiver') \
+            .only('id', 'sender__username', 'receiver__username', 'content', 'timestamp', 'edited', 'edited_by')
+
+        data = [
+            {
+                "id": msg.id,
+                "sender": msg.sender.username,
+                "receiver": msg.receiver.username,
+                "content": msg.content,
+                "timestamp": msg.timestamp,
+                "edited": msg.edited,
+                "edited_by": getattr(msg, "edited_by", None)
+            }
+            for msg in unread_messages
+        ]
+        return JsonResponse({"unread_messages": data}, safe=False)
