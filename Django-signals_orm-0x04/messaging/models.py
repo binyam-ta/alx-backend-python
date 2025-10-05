@@ -6,33 +6,21 @@ from django.utils import timezone
 class UnreadMessagesManager(models.Manager):
     """Custom manager to filter unread messages for a specific user."""
 
-    def for_user(self, user):
-        """
-        Returns unread messages for the given user.
-        Uses `.only()` to optimize by fetching minimal fields.
-        """
-        return (
-            self.get_queryset()
-            .filter(receiver=user, read=False)
-            .only("id", "sender", "content", "timestamp")
-            .select_related("sender")  # fetch sender in the same query
-        )
+    def unread_for_user(self, user):
+        return self.filter(receiver=user, read=False).only('id', 'sender', 'content', 'timestamp')
         
 class Message(models.Model):
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_messages")
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_messages")
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
     content = models.TextField()
-    timestamp = models.DateTimeField(default=timezone.now)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    read = models.BooleanField(default=False)
     edited = models.BooleanField(default=False)
+    edited_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='edited_messages')
+    parent_message = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
 
-    # 👇 Self-referential relationship for threaded replies
-    parent_message = models.ForeignKey(
-        "self",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="replies"
-    )
+    objects = models.Manager()  # default manager
+    unread = UnreadMessagesManager()  # custom manager
        # 👇 New field for message read status
     read = models.BooleanField(default=False)
 
@@ -72,8 +60,7 @@ class Notification(models.Model):
 
 
 class MessageHistory(models.Model):
-    """Stores old versions of messages before edits."""
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="history")
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='history')
     old_content = models.TextField()
     edited_at = models.DateTimeField(auto_now_add=True)
 

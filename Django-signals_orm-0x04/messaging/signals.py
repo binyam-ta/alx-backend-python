@@ -15,22 +15,15 @@ def create_notification(sender, instance, created, **kwargs):
         )
 
 
+# Log message edits
 @receiver(pre_save, sender=Message)
 def log_message_edit(sender, instance, **kwargs):
-    """Signal to log message edits before saving."""
     if instance.pk:
-        try:
-            old_message = Message.objects.get(pk=instance.pk)
-        except Message.DoesNotExist:
-            return
-
-        # If the content changes, save old content in history
-        if old_message.content != instance.content:
-            MessageHistory.objects.create(
-                message=instance,
-                old_content=old_message.content
-            )
-            instance.edited = True  # mark as edited
+        old = Message.objects.get(pk=instance.pk)
+        if old.content != instance.content:
+            MessageHistory.objects.create(message=instance, old_content=old.content)
+            instance.edited = True
+  # mark as edited
 
 @receiver(post_delete, sender=User)
 def delete_user_related_data(sender, instance, **kwargs):

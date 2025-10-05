@@ -1,37 +1,38 @@
-# messaging/views.py
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import Message, MessageHistory
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect
-from django.shortcuts import render
-from django.contrib import messages
-from .models import Message
 
+# Threaded messages view
 @login_required
-def delete_user(request):
-    """Allow a user to delete their own account."""
-    user = request.user
-    username = user.username
-    user.delete()
-    messages.success(request, f"User '{username}' and all related data have been deleted.")
-    return redirect("home")  # Replace 'home' with your home page URL name
+def get_threaded_messages(request, conversation_id):
+    messages = Message.objects.filter(receiver=request.user, parent_message__isnull=True)\
+        .select_related('sender')\
+        .prefetch_related('replies')
 
-def conversation_detail(request, message_id):
-    """Fetch a conversation and all its replies efficiently."""
-    root_message = get_object_or_404(
-        Message.objects.select_related("sender", "receiver").prefetch_related("replies__sender", "replies__receiver"),
-        id=message_id
-    )
+    def build_thread(message):
+        return {
+            "id": message.id,
+            "sender": message.sender.username,
+            "content": message.content,
+            "timestamp": message.timestamp,
+            "edited": message.edited,
+            "replies": [build_thread(reply) for reply in message.replies.all()]
+        }
 
-    thread = root_message.get_thread()
+    data = [build_thread(msg) for msg in messages]
+    return JsonResponse(data, safe=False)
 
-    return render(request, "messaging/conversation_detail.html", {
-        "root_message": root_message,
-        "thread": thread
-    })
-   
-def unread_messages_view(request):
-    user = request.user
-    unread_messages = Message.unread.for_user(user)
+# Inbox showing only unread messages
+@login_required
+def inbox(request):
+    unread_messages = Message.unread.unread_for_user(request.user)
+    data = [{"id": msg.id, "sender": msg.sender.username, "content": msg.content, "timestamp": msg.timestamp} for msg in unread_messages]
+    return JsonResponse(data, safe=False)
 
-    return render(request, "messaging/unread_messages.html", {
-        "unread_messages": unread_messages
-    })    
+# Message edit history
+@login_required
+def message_history(request, message_id):
+    message = get_object_or_404(Message, id=message_id, receiver=request.user)
+    history = message.history.all().values('old_content', 'edited_at')
+    return JsonResponse(list(history), safe=False)
