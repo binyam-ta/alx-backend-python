@@ -1,0 +1,36 @@
+#!/bin/bash
+
+echo "🔍 Checking if Minikube is installed..."
+if ! command -v minikube >/dev/null 2>&1; then
+    echo "⚙️ Minikube not found. Installing Minikube..."
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+    rm minikube-linux-amd64
+    echo "✅ Minikube installed."
+else
+    echo "✅ Minikube is installed."
+fi
+
+echo "🔍 Checking if Docker is available..."
+if ! docker version >/dev/null 2>&1; then
+    echo "❌ Docker is not running or not available in WSL."
+    echo "💡 Please start Docker Desktop on Windows and enable WSL integration for your distro."
+    exit 1
+fi
+
+echo "⚡ Starting Minikube with Docker driver..."
+minikube start --driver=docker
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to start Minikube. Ensure Docker Desktop is running and WSL integration is enabled."
+    exit 1
+fi
+
+echo "✅ Minikube cluster started successfully!"
+
+echo "🔍 Checking cluster info..."
+kubectl cluster-info || echo "⚠️ Could not get cluster info. Check if Minikube started correctly."
+
+echo "🔍 Retrieving available pods..."
+kubectl get pods --all-namespaces || echo "⚠️ No pods found or cluster not ready."
+
+echo "🎉 Kubernetes local cluster setup complete!"
